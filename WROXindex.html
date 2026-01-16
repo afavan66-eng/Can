@@ -1,35 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Online Brawl Stars</title>
+    <title>3D Online Brawl - Mobile</title>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background: #000; }
-        #ui { position: fixed; top: 20px; left: 20px; color: white; z-index: 10; pointer-events: none; }
-        #lobby { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); padding: 30px; border-radius: 20px; text-align: center; z-index: 100; border: 3px solid #f1c40f; color: white; }
-        input { padding: 12px; border-radius: 8px; border: none; width: 250px; margin: 15px 0; font-size: 16px; }
-        button { padding: 12px 25px; background: #f1c40f; border: none; cursor: pointer; font-weight: bold; border-radius: 8px; font-size: 16px; transition: 0.3s; }
-        button:hover { background: #fff; color: #000; }
-        #cheat-indicator { position: fixed; top: 10px; right: 10px; color: #0f0; font-size: 12px; display: none; }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #000; touch-action: none; }
+        #lobby { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; color: white; }
+        input { padding: 15px; border-radius: 10px; border: none; width: 80%; margin: 10px 0; font-size: 18px; text-align: center; }
+        button { padding: 15px 30px; background: #f1c40f; border: none; font-weight: bold; border-radius: 10px; font-size: 18px; color: #000; }
+        
+        /* Joystick ve Butonlar */
+        #joystick-zone { position: fixed; bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; z-index: 100; touch-action: none; }
+        #joystick-stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: rgba(255,255,255,0.4); border-radius: 50%; }
+        #fire-btn { position: fixed; bottom: 50px; right: 50px; width: 80px; height: 80px; background: rgba(255,0,0,0.5); border-radius: 50%; z-index: 100; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; border: 3px solid white; }
+        
+        #my-id-label { position: fixed; top: 10px; width: 100%; text-align: center; color: yellow; z-index: 50; font-size: 12px; }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        <h2>3D BRAWL MOD</h2>
-        <div id="my-id-display">ID'niz Oluşturuluyor...</div>
-    </div>
+    <div id="my-id-label">ID Bekleniyor...</div>
 
     <div id="lobby">
-        <h1>BRAWL 3D ONLINE</h1>
-        <p>Senin ID: <b id="my-id" style="color:#f1c40f">---</b></p>
-        <input type="text" id="target-id" placeholder="Arkadaşının ID'sini buraya yapıştır">
-        <br>
-        <button onclick="connectToFriend()">DÜNYAYA BAĞLAN</button>
-        <p style="font-size: 12px; color: #aaa; margin-top: 15px;">Hareket: WASD | Ateş: Mouse Tık</p>
+        <h2 style="color:#f1c40f">BRAWL 3D MOBILE</h2>
+        <p>Senin ID: <b id="my-id">...</b></p>
+        <input type="text" id="target-id" placeholder="Arkadaşının ID'si">
+        <button onclick="connectToFriend()">BAĞLAN</button>
+        <p style="font-size: 12px; margin-top: 10px;">Sol taraf: Hareket | Sağ buton: Ateş</p>
     </div>
 
-    <div id="cheat-indicator">HİLE AKTİF: Hız + Ölümsüzlük</div>
+    <div id="joystick-zone"><div id="joystick-stick"></div></div>
+    <div id="fire-btn" onclick="shoot()">ATEŞ</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
@@ -37,107 +39,132 @@
     <script>
         let scene, camera, renderer, player, otherPlayer;
         let peer, conn;
-        let keys = {};
-        let speed = 0.2;
-        let isGodMode = false;
+        let moveDir = { x: 0, z: 0 };
+        let bullets = [];
+        let speed = 0.15;
 
-        // --- 1. SAHNE VE 3D DÜNYA KURULUMU ---
-        function init3D() {
+        // --- 3D BAŞLATMA ---
+        function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x2ecc71); // Yeşil zemin
+            scene.background = new THREE.Color(0x34495e);
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            // Zemin Grid
-            const grid = new THREE.GridHelper(100, 50, 0x000000, 0x000000);
+            const grid = new THREE.GridHelper(50, 25, 0xffffff, 0x444444);
             grid.position.y = -0.5;
             scene.add(grid);
 
-            // Senin Karakterin (Kutu üzerine 1.png kaplama)
+            // Karakterin (1.png kaplamalı)
             const texture = new THREE.TextureLoader().load('1.png');
-            const geometry = new THREE.BoxGeometry(1, 1, 1);
-            const material = new THREE.MeshBasicMaterial({ map: texture });
-            player = new THREE.Mesh(geometry, material);
+            player = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ map: texture }));
             scene.add(player);
 
-            // Arkadaşının Karakteri (Kırmızı Kutu)
-            otherPlayer = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-            otherPlayer.position.set(5, 0, 0);
+            // Diğer Oyuncu
+            otherPlayer = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+            otherPlayer.position.x = 1000; // Başta gizli
             scene.add(otherPlayer);
 
-            camera.position.y = 10;
-            camera.position.z = 10;
+            camera.position.set(0, 8, 8);
             camera.lookAt(player.position);
 
             animate();
         }
 
-        // --- 2. ONLINE BAĞLANTI (ID SİSTEMİ) ---
-        peer = new Peer();
-        peer.on('open', (id) => {
-            document.getElementById('my-id').innerText = id;
-            document.getElementById('my-id-display').innerText = "Senin ID: " + id;
+        // --- JOYSTICK MANTIĞI ---
+        const zone = document.getElementById('joystick-zone');
+        const stick = document.getElementById('joystick-stick');
+        zone.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0];
+            const rect = zone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const dx = touch.clientX - centerX;
+            const dy = touch.clientY - centerY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const max = 40;
+            
+            const angle = Math.atan2(dy, dx);
+            const moveX = Math.min(dist, max) * Math.cos(angle);
+            const moveY = Math.min(dist, max) * Math.sin(angle);
+            
+            stick.style.transform = `translate(${moveX}px, ${moveY}px)`;
+            moveDir.x = moveX / max;
+            moveDir.z = moveY / max;
+        });
+        zone.addEventListener('touchend', () => {
+            stick.style.transform = `translate(0,0)`;
+            moveDir = { x: 0, z: 0 };
         });
 
-        // Gelen bağlantı
-        peer.on('connection', (connection) => {
-            conn = connection;
-            startOnlineGame();
+        // --- ONLINE BAĞLANTI ---
+        peer = new Peer();
+        peer.on('open', id => {
+            document.getElementById('my-id').innerText = id;
+            document.getElementById('my-id-label').innerText = "ID: " + id;
+        });
+
+        peer.on('connection', c => {
+            conn = c;
+            ready();
         });
 
         function connectToFriend() {
-            const target = document.getElementById('target-id').value;
-            conn = peer.connect(target);
-            startOnlineGame();
+            conn = peer.connect(document.getElementById('target-id').value);
+            ready();
         }
 
-        function startOnlineGame() {
+        function ready() {
             document.getElementById('lobby').style.display = 'none';
-            conn.on('data', (data) => {
-                if(data.type === 'move') {
-                    otherPlayer.position.set(data.x, data.y, data.z);
-                }
+            conn.on('data', data => {
+                if(data.type === 'move') otherPlayer.position.set(data.x, 0, data.z);
+                if(data.type === 'fire') spawnOtherBullet(data.x, data.z, data.vx, data.vz);
             });
         }
 
-        // --- 3. HİLE VE KONTROLLER ---
-        window.onkeydown = (e) => { 
-            keys[e.code] = true; 
-            // Gizli Hile Tuşu: 'P' harfine basınca hızı artırır
-            if(e.code === 'KeyP') {
-                speed = 0.8;
-                isGodMode = true;
-                document.getElementById('cheat-indicator').style.display = 'block';
-            }
-        };
-        window.onkeyup = (e) => { keys[e.code] = false; };
+        function shoot() {
+            // İleri doğru mermi at (Hileli: Mermiler çok hızlı!)
+            const b = { x: player.position.x, z: player.position.z, vx: 0, vz: -0.5 };
+            bullets.push(createBullet(b));
+            if(conn) conn.send({ type: 'fire', x: b.x, z: b.z, vx: b.vx, vz: b.vz });
+        }
+
+        function createBullet(b) {
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.2), new THREE.MeshBasicMaterial({ color: 0xffff00 }));
+            mesh.position.set(b.x, 0, b.z);
+            scene.add(mesh);
+            return { mesh, vx: b.vx, vz: b.vz };
+        }
+
+        function spawnOtherBullet(x, z, vx, vz) {
+            bullets.push(createBullet({ x, z, vx, vz }));
+        }
 
         function animate() {
             requestAnimationFrame(animate);
-
-            // Hareket Mantığı
-            let moved = false;
-            if (keys['KeyW']) { player.position.z -= speed; moved = true; }
-            if (keys['KeyS']) { player.position.z += speed; moved = true; }
-            if (keys['KeyA']) { player.position.x -= speed; moved = true; }
-            if (keys['KeyD']) { player.position.x += speed; moved = true; }
-
-            // Kamera Takibi
-            camera.position.x = player.position.x;
-            camera.position.z = player.position.z + 10;
-
-            // Veriyi arkadaşına gönder
-            if (moved && conn && conn.open) {
-                conn.send({ type: 'move', x: player.position.x, y: player.position.y, z: player.position.z });
+            
+            if (moveDir.x !== 0 || moveDir.z !== 0) {
+                player.position.x += moveDir.x * speed;
+                player.position.z += moveDir.z * speed;
+                camera.position.x = player.position.x;
+                camera.position.z = player.position.z + 8;
+                if(conn && conn.open) conn.send({ type: 'move', x: player.position.x, z: player.position.z });
             }
+
+            bullets.forEach((b, i) => {
+                b.mesh.position.x += b.vx;
+                b.mesh.position.z += b.vz;
+                if(Math.abs(b.mesh.position.z) > 50) {
+                    scene.remove(b.mesh);
+                    bullets.splice(i, 1);
+                }
+            });
 
             renderer.render(scene, camera);
         }
 
-        window.onload = init3D;
+        window.onload = init;
     </script>
 </body>
 </html>
